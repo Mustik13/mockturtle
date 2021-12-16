@@ -34,11 +34,18 @@
 
 #include <kitty/constructors.hpp>
 #include <kitty/dynamic_truth_table.hpp>
+#include <kitty/static_truth_table.hpp>
 #include <kitty/operations.hpp>
+#include <kitty/kitty.hpp>
+#include <kitty/detail/constants.hpp>
 
 #include "../utils/node_map.hpp"
 #include "miter.hpp"
 #include "simulation.hpp"
+#include <math.h>
+#include <iostream>
+#include <cmath>
+using namespace kitty;
 
 namespace mockturtle
 {
@@ -73,12 +80,101 @@ public:
 
   bool run()
   {
-    /* TODO: write your implementation here */
-    return false;
+
+  bool is_equivalent = true;
+
+  // Get the split variable
+	_st.split_var = split_var_(_ntk.num_pis());
+
+  // Get the rounds
+	_st.rounds = rounds_(_ntk.num_pis(), _st.split_var);
+
+  // Pattern initialization
+	pattern_t patterns(_ntk);
+
+  // Simulation
+	default_simulator<dynamic_truth_table> sim(_st.split_var);
+
+  // For remaining of the truth table
+	for (auto round_number = 0; round_number < _st.rounds; round_number++)
+	{
+    std::cout<<"round number is" << round_number <<std::endl;
+
+    // Update the patterns
+		_ntk.foreach_pi([&](auto const& pi_number) {
+
+      // Redefine the truth table
+			dynamic_truth_table tt(_st.split_var);
+
+      // Create the vectors
+			if (pi_number <= _st.split_var) create_nth_var(tt, pi_number - 1);
+
+      // Get the new pattern
+			patterns[pi_number] = get_pattern_(pi_number, round_number, tt); 
+		});
+
+    // Simulate the nodes
+		simulate_nodes(_ntk, patterns, sim);
+
+    // Check the equivalence by verifiying the outputs (XORs)
+    is_equivalent_(is_equivalent, _ntk, patterns);
+	}
+	return is_equivalent;
   }
 
 private:
-  /* you can add additional methods here */
+
+  bool is_equivalent_(auto& is_equivalent, auto& _ntk, auto& patterns)
+  {
+    _ntk.foreach_po([&](auto const& f) {
+      if (_ntk.is_complemented(f))
+      {
+        is_equivalent &= is_const0(~patterns[f]);
+      }
+      else
+      {
+        is_equivalent &= is_const0(patterns[f]);
+      }
+		});
+
+  }
+
+  dynamic_truth_table get_pattern_(auto& pi_number, auto& round_number, auto& tt)
+  {
+    if ((pi_number <= _st.split_var) || (round_number >> (pi_number - _st.split_var - 1)) % 2)
+    {
+      return tt;
+    }
+    else
+    {
+      return ~tt;
+    }
+  } 
+
+  uint32_t rounds_(uint32_t N, uint32_t split_var)
+  {
+	  return pow(2, N - split_var);
+  }
+  
+  uint32_t split_var_(uint32_t N)
+  {
+	  uint32_t max_m = max_m_();
+    if (N > max_m)
+    {
+      return max_m;
+    }
+    else
+    {
+      return N;
+    }
+  }
+  
+  uint32_t max_m_()
+  {
+    return log(pow(2, 29)/_ntk._storage->nodes.size()-32) / log(2) + 3;
+  }
+
+
 
 private:
   Ntk& _ntk;
