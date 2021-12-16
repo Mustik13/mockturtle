@@ -103,7 +103,7 @@ public:
     // Update the patterns
 		_ntk.foreach_pi([&](auto const& pi_number) {
 
-      // Redefine the truth table
+      // Redefine the truth
 			dynamic_truth_table tt(_st.split_var);
 
       // Create the vectors
